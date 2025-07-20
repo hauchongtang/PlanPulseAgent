@@ -125,6 +125,7 @@ class NotionAgent:
         high_confidence_keywords = [
             'notion', 'calendar', 'event', 'schedule', 'appointment',
             'meeting', 'date', 'database', 'query', 'retrieve', "free", "availability",
+            'activity', 'task', 'reminder', 'agenda', 'planning', 'activities', 'plans', 'events'
         ]
         
         # Medium confidence keywords
