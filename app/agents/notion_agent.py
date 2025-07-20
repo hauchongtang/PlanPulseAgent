@@ -72,10 +72,11 @@ class NotionAgent:
             
             # Add system instructions to the task
             system_instruction = (
-                "You are a specialized Notion and calendar assistant. "
+                "You are a specialized Notion assistant. "
                 "You excel at retrieving events, managing schedules, and working with dates. "
-                "Always provide clear, structured responses about calendar events and dates. "
+                "Always provide clear, structured responses about events and dates. "
                 "When working with dates, be precise and consider time zones if relevant."
+                "Please ensure that the data displayed is beautifully formatted and easy to read on Telegram."
             )
             
             enhanced_task = f"{system_instruction}\n\nUser request: {task}"
@@ -123,7 +124,7 @@ class NotionAgent:
         # High confidence keywords
         high_confidence_keywords = [
             'notion', 'calendar', 'event', 'schedule', 'appointment',
-            'meeting', 'date', 'database', 'query', 'retrieve'
+            'meeting', 'date', 'database', 'query', 'retrieve', "free", "availability",
         ]
         
         # Medium confidence keywords
@@ -155,5 +156,6 @@ class NotionAgent:
             "Query calendar schedules",
             "Handle date-based operations",
             "Manage appointments and meetings",
-            "Process time-related queries"
+            "Process date and time-related queries"
+            "Handles queries related to whether user is free on a specific date"
         ]
