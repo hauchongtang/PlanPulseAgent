@@ -1,6 +1,7 @@
 from typing import Union
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from app.api.main import api_router
 
@@ -17,6 +18,8 @@ app.add_middleware(
   allow_methods=["*"],
   allow_headers=["*"],
 )
+
+app.add_middleware(HTTPSRedirectMiddleware)
 
 # Add a root endpoint
 @app.get("/")
