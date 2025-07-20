@@ -88,5 +88,4 @@ def get_events(date_from: datetime.datetime, date_to: datetime.datetime) -> str:
   except Exception as e:
     print(e)
     return f"Error has occured with Notion Agent -> {e}"
-  print(result_str)
   return result_str
