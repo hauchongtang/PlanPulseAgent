@@ -20,19 +20,20 @@ class AgentService:
             self._supervisor = SupervisorAgent()
         return self._supervisor
     
-    def process_message(self, message: str) -> Dict[str, Any]:
+    def process_message(self, message: str, user_id: str = None) -> Dict[str, Any]:
         """
-        Process a user message through the supervisor agent workflow.
+        Process a user message through the supervisor agent workflow with user-specific memory.
         
         Args:
             message: The user's input message
+            user_id: Unique identifier for the user (for memory isolation)
             
         Returns:
             Dict containing the orchestrated response and metadata
         """
         try:
             supervisor = self._get_supervisor()
-            result = supervisor.process_message(message)
+            result = supervisor.process_message(message, user_id=user_id)
             
             # Enhance the response with service-level metadata
             result["service_metadata"] = {

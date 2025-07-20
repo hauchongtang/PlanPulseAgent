@@ -35,15 +35,15 @@ async def pass_telegram_message_to_orchestrator(request: TelegramMessageRequest)
         TelegramMessageResponse: The processed response from the agent
     """
     try:
-        # Process the message through the agent service
-        result = agent_service.process_message(request.chat_message)
+        # Process the message through the agent service with user-specific memory
+        result = agent_service.process_message(request.chat_message, user_id=request.chat_id)
         
         return TelegramMessageResponse(
             chat_id=request.chat_id,
             chat_message=request.chat_message,
             response=result.get("response", ""),
             success=result.get("success", False),
-            metadata=result.get("metadata", {})
+            metadata=result.get("supervisor_metadata", {})
         )
         
     except Exception as e:

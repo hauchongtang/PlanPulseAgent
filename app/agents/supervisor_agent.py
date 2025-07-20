@@ -164,14 +164,16 @@ class SupervisorAgent:
         return result
     
     def _execute_task(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute the task using the selected agent."""
+        """Execute the task using the selected agent with conversation context."""
         # Handle both dict and object state formats
         if hasattr(state, 'selected_agent'):
             selected_agent_name = state.selected_agent
             task = state.task
+            messages = getattr(state, 'messages', [])
         else:
             selected_agent_name = state.get("selected_agent")
             task = state.get("task", "")
+            messages = state.get("messages", [])
         
         if not selected_agent_name or selected_agent_name not in self.agents:
             return {
@@ -185,7 +187,19 @@ class SupervisorAgent:
         selected_agent = self.agents[selected_agent_name]
         
         try:
-            response = selected_agent.process_task(task)
+            # Build context from conversation history for the agent
+            context_messages = []
+            if len(messages) > 1:  # More than just the current message
+                context_messages = messages[:-1]  # All but the last message
+                context_text = "\n".join([
+                    f"Previous: {msg.get('content', str(msg))}" 
+                    for msg in context_messages[-3:]  # Last 3 messages for context
+                ])
+                enhanced_task = f"Conversation context:\n{context_text}\n\nCurrent request: {task}"
+            else:
+                enhanced_task = task
+            
+            response = selected_agent.process_task(enhanced_task)
             return {"agent_response": response}
         except Exception as e:
             return {
@@ -198,12 +212,14 @@ class SupervisorAgent:
             }
     
     def _finalize_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Finalize the response with supervisor context."""
+        """Finalize the response with supervisor context and update conversation history."""
         # Handle both dict and object state formats
         if hasattr(state, 'agent_response'):
             agent_response = state.agent_response
+            messages = getattr(state, 'messages', [])
         else:
             agent_response = state.get("agent_response", {})
+            messages = state.get("messages", [])
         
         if not agent_response:
             return {"final_response": "No response generated"}
@@ -216,23 +232,45 @@ class SupervisorAgent:
         else:
             final_response = f"I encountered an issue: {agent_response_text}"
         
-        return {"final_response": final_response}
+        # Add assistant response to conversation history
+        assistant_message = {"role": "assistant", "content": final_response}
+        updated_messages = messages + [assistant_message]
+        
+        return {
+            "final_response": final_response,
+            "messages": updated_messages
+        }
     
-    def process_message(self, message: str) -> Dict[str, Any]:
+    def process_message(self, message: str, user_id: str = None) -> Dict[str, Any]:
         """
-        Process a message through the supervisor workflow.
+        Process a message through the supervisor workflow with user-specific memory.
         
         Args:
             message: The user's input message
+            user_id: Unique identifier for the user (for memory isolation)
             
         Returns:
             Dict containing the supervisor's orchestrated response
         """
         try:
-            # Create initial state as a dictionary
+            # Use user-specific thread ID for memory isolation
+            thread_id = f"user_{user_id}" if user_id else "default"
+            config = {"configurable": {"thread_id": thread_id}}
+            
+            # Get current conversation state (if any) from memory
+            try:
+                current_state = self.workflow.get_state(config)
+                existing_messages = current_state.values.get("messages", []) if current_state.values else []
+            except:
+                existing_messages = []
+            
+            # Create initial state with conversation history
+            new_message = {"role": "user", "content": message}
+            all_messages = existing_messages + [new_message]
+            
             initial_state = {
                 "task": message,
-                "messages": [{"role": "user", "content": message}],
+                "messages": all_messages,
                 "selected_agent": None,
                 "agent_response": None,
                 "final_response": "",
@@ -240,8 +278,7 @@ class SupervisorAgent:
                 "confidence_scores": {}
             }
             
-            # Execute workflow
-            config = {"configurable": {"thread_id": "default"}}
+            # Execute workflow with user-specific thread ID for memory isolation
             final_state = self.workflow.invoke(initial_state, config=config)
             
             # Extract results from final state - handle both dict and object formats
