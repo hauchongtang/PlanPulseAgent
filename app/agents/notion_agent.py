@@ -10,6 +10,7 @@ from langchain_core.tools import BaseTool
 
 from app.api.settings import get_api_key
 from app.tools.notion.getevents import get_events, get_events_formatted
+from app.tools.notion.createevent import create_event, get_create_event_options
 from app.tools.calendar.add import add
 
 
@@ -17,7 +18,8 @@ class NotionAgent:
     """
     Specialized agent for Notion and calendar operations.
     Handles tasks related to:
-    - Retrieving events from Notion databases
+    - Retrieving events from Notion databases (JSON and formatted)
+    - Creating new events in Notion
     - Calendar operations
     - Date-based queries
     - Schedule management
@@ -28,9 +30,10 @@ class NotionAgent:
         self.name = "notion_agent"
         self.description = (
             "I specialize in Notion database operations and calendar management. "
-            "I can retrieve events, query schedules, and handle date-related tasks."
+            "I can retrieve events, create new events, query schedules, and handle date-related tasks. "
+            "I support both JSON and formatted text outputs for events."
         )
-        self.tools = [get_events, get_events_formatted, add]
+        self.tools = [get_events, get_events_formatted, create_event, get_create_event_options]
         self._agent = None
     
     def _create_model(self) -> ChatGoogleGenerativeAI:
