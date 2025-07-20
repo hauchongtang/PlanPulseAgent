@@ -3,7 +3,10 @@ Agent orchestration service using supervisor pattern with specialized agents.
 Provides separation of concerns by delegating tasks to appropriate specialized agents.
 """
 
+from datetime import datetime
 from typing import Dict, List, Any
+
+import pytz
 from app.agents.supervisor_agent import SupervisorAgent
 
 
@@ -33,6 +36,11 @@ class AgentService:
         """
         try:
             supervisor = self._get_supervisor()
+            # Use Singapore timezone
+            singapore_tz = pytz.timezone('Asia/Singapore')
+            singapore_time = datetime.now(singapore_tz)
+            timestamp = singapore_time.strftime("%Y-%m-%d %H:%M:%S %Z")
+            message += f" [In case you are not sure of current DateTime, Current Timestamp is {timestamp}. You are to always use this timestamp until a new one is provided.]"
             result = supervisor.process_message(message, user_id=user_id)
             
             # Enhance the response with service-level metadata

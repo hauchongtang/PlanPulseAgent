@@ -151,6 +151,7 @@ class NotionAgent:
         """Get a list of this agent's capabilities."""
         return [
             "Retrieve events from Notion databases",
+            "Create new events in Notion",
             "Query calendar schedules",
             "Handle date-based operations",
             "Manage appointments and meetings",

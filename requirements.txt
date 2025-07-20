@@ -14,3 +14,4 @@ pydantic==2.11.7
 starlette==0.47.1
 hypercorn==0.14.4
 aiohttp==3.11.11
+pytz==2025.2

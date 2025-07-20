@@ -40,7 +40,7 @@ class SupervisorAgent:
         )
         
         # Memory management configuration
-        self.max_messages_per_user = 5  # Maximum messages before summarization
+        self.max_messages_per_user = 10  # Maximum messages before summarization
         
         # Initialize specialized agents
         self.agents = {
@@ -58,7 +58,7 @@ class SupervisorAgent:
             raise ValueError("Google API key is not configured")
         
         return ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             temperature=0.2,  # Low temperature for consistent reasoning
             max_retries=2,
             google_api_key=api_key
@@ -99,14 +99,14 @@ class SupervisorAgent:
     
     def _manage_conversation_memory(self, messages: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
         """
-        Manage conversation memory with 5-message limit and summarization.
-        
+        Manage conversation memory with 10-message limit and summarization.
+
         Args:
             messages: Current conversation messages
             user_id: User identifier for logging/debugging
             
         Returns:
-            Managed message list with maximum 5 messages
+            Managed message list with maximum 10 messages
         """
         # If we're within the limit, return as-is
         if len(messages) <= self.max_messages_per_user:
