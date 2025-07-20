@@ -9,7 +9,7 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import BaseTool
 
 from app.api.settings import get_api_key
-from app.tools.notion.getevents import get_events
+from app.tools.notion.getevents import get_events, get_events_formatted
 from app.tools.calendar.add import add
 
 
@@ -30,7 +30,7 @@ class NotionAgent:
             "I specialize in Notion database operations and calendar management. "
             "I can retrieve events, query schedules, and handle date-related tasks."
         )
-        self.tools = [get_events, add]
+        self.tools = [get_events, get_events_formatted, add]
         self._agent = None
     
     def _create_model(self) -> ChatGoogleGenerativeAI:
