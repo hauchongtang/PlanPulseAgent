@@ -32,12 +32,15 @@ class SupervisorAgent:
     """
     
     def __init__(self):
-        """Initialize the supervisor with specialized agents."""
+        """Initialize the supervisor with specialized agents and memory management."""
         self.name = "supervisor_agent"
         self.description = (
             "I am a supervisor agent that coordinates between specialized agents. "
             "I analyze your request and delegate it to the most appropriate agent."
         )
+        
+        # Memory management configuration
+        self.max_messages_per_user = 5  # Maximum messages before summarization
         
         # Initialize specialized agents
         self.agents = {
@@ -93,6 +96,79 @@ class SupervisorAgent:
         # Compile with memory
         memory = MemorySaver()
         return workflow.compile(checkpointer=memory)
+    
+    def _manage_conversation_memory(self, messages: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
+        """
+        Manage conversation memory with 5-message limit and summarization.
+        
+        Args:
+            messages: Current conversation messages
+            user_id: User identifier for logging/debugging
+            
+        Returns:
+            Managed message list with maximum 5 messages
+        """
+        # If we're within the limit, return as-is
+        if len(messages) <= self.max_messages_per_user:
+            return messages
+        
+        # We need to summarize - take all but the last message (current user message)
+        messages_to_summarize = messages[:-1]  # All except the current message
+        current_message = messages[-1]  # The current user message
+        
+        # Create summary of the conversation
+        summary = self._summarize_conversation(messages_to_summarize, user_id)
+        
+        # Create a summary message
+        summary_message = {
+            "role": "system", 
+            "content": f"Previous conversation summary: {summary}",
+            "type": "summary"
+        }
+        
+        # Return: [summary_message, current_user_message]
+        return [summary_message, current_message]
+    
+    def _summarize_conversation(self, messages: List[Dict[str, Any]], user_id: str) -> str:
+        """
+        Summarize a conversation using the supervisor model.
+        
+        Args:
+            messages: Messages to summarize
+            user_id: User identifier
+            
+        Returns:
+            Conversation summary
+        """
+        try:
+            # Create conversation text for summarization
+            conversation_text = "\n".join([
+                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+                for msg in messages
+                if msg.get('content') and msg.get('type') != 'summary'  # Skip previous summaries
+            ])
+            
+            if not conversation_text.strip():
+                return "No significant conversation history to summarize."
+            
+            summary_prompt = f"""
+            Summarize this conversation concisely, focusing on:
+            1. Key topics discussed
+            2. Important calculations, results, or answers provided
+            3. User preferences or context that should be remembered
+            4. Any ongoing tasks or requests
+            
+            Conversation:
+            {conversation_text}
+            
+            Provide a concise summary (max 150 words):
+            """
+            
+            response = self.supervisor_model.invoke(summary_prompt)
+            return response.content[:400]  # Limit summary length
+            
+        except Exception as e:
+            return f"Conversation included topics discussed previously (summary unavailable: {str(e)})"
     
     def _analyze_task(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze the incoming task and gather confidence scores from agents."""
@@ -188,14 +264,39 @@ class SupervisorAgent:
         
         try:
             # Build context from conversation history for the agent
-            context_messages = []
             if len(messages) > 1:  # More than just the current message
-                context_messages = messages[:-1]  # All but the last message
-                context_text = "\n".join([
-                    f"Previous: {msg.get('content', str(msg))}" 
-                    for msg in context_messages[-3:]  # Last 3 messages for context
-                ])
-                enhanced_task = f"Conversation context:\n{context_text}\n\nCurrent request: {task}"
+                # Filter out the current message and any system summaries for context
+                context_messages = [
+                    msg for msg in messages[:-1] 
+                    if msg.get('role') != 'system' or msg.get('type') != 'summary'
+                ]
+                
+                # Include summary if present
+                summary_messages = [
+                    msg for msg in messages 
+                    if msg.get('role') == 'system' and msg.get('type') == 'summary'
+                ]
+                
+                context_parts = []
+                
+                # Add summary context if available
+                if summary_messages:
+                    latest_summary = summary_messages[-1]  # Get the most recent summary
+                    context_parts.append(f"Context: {latest_summary.get('content', '')}")
+                
+                # Add recent conversation context (last 2 exchanges)
+                if context_messages:
+                    recent_context = context_messages[-2:]  # Last 2 non-summary messages
+                    context_text = "\n".join([
+                        f"Recent: {msg.get('content', str(msg))}" 
+                        for msg in recent_context
+                    ])
+                    context_parts.append(context_text)
+                
+                if context_parts:
+                    enhanced_task = f"{chr(10).join(context_parts)}\n\nCurrent request: {task}"
+                else:
+                    enhanced_task = task
             else:
                 enhanced_task = task
             
@@ -264,13 +365,16 @@ class SupervisorAgent:
             except:
                 existing_messages = []
             
-            # Create initial state with conversation history
+            # Create initial state with conversation history and memory management
             new_message = {"role": "user", "content": message}
             all_messages = existing_messages + [new_message]
             
+            # Apply memory management (summarize if over 5 messages)
+            managed_messages = self._manage_conversation_memory(all_messages, user_id or "default")
+            
             initial_state = {
                 "task": message,
-                "messages": all_messages,
+                "messages": managed_messages,
                 "selected_agent": None,
                 "agent_response": None,
                 "final_response": "",
