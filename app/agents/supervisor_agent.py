@@ -5,7 +5,6 @@ This agent analyzes incoming tasks and delegates them to the most appropriate sp
 
 from typing import Dict, List, Any, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
@@ -56,7 +55,7 @@ class SupervisorAgent:
             raise ValueError("Google API key is not configured")
         
         return ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.2,  # Low temperature for consistent reasoning
             max_retries=2,
             google_api_key=api_key
@@ -64,7 +63,19 @@ class SupervisorAgent:
     
     def _create_workflow(self) -> StateGraph:
         """Create the LangGraph workflow for agent supervision."""
-        workflow = StateGraph(SupervisorState)
+        from typing import Annotated
+        
+        # Define the state schema for LangGraph - using simple dict for messages
+        class WorkflowState(BaseModel):
+            messages: List[Dict[str, Any]] = []
+            task: str = ""
+            selected_agent: Optional[str] = None
+            agent_response: Optional[Dict[str, Any]] = None
+            final_response: str = ""
+            reasoning: str = ""
+            confidence_scores: Dict[str, float] = {}
+        
+        workflow = StateGraph(WorkflowState)
         
         # Add nodes
         workflow.add_node("analyze_task", self._analyze_task)
@@ -83,16 +94,19 @@ class SupervisorAgent:
         memory = MemorySaver()
         return workflow.compile(checkpointer=memory)
     
-    def _analyze_task(self, state: SupervisorState) -> SupervisorState:
+    def _analyze_task(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze the incoming task and gather confidence scores from agents."""
-        task = state.task
+        # Handle both dict and object state formats
+        if hasattr(state, 'task'):
+            task = state.task
+        else:
+            task = state.get("task", "")
+            
         confidence_scores = {}
         
         # Get confidence scores from each agent
         for agent_name, agent in self.agents.items():
             confidence_scores[agent_name] = agent.can_handle(task)
-        
-        state.confidence_scores = confidence_scores
         
         # Add reasoning about the task
         reasoning_prompt = f"""
@@ -104,76 +118,105 @@ class SupervisorAgent:
         Provide a brief analysis of what type of task this is and which agent seems most suitable.
         """
         
+        reasoning = ""
         try:
-            response = self.supervisor_model.invoke([HumanMessage(content=reasoning_prompt)])
-            state.reasoning = response.content
+            # Use string prompt directly instead of HumanMessage for simple invoke
+            response = self.supervisor_model.invoke(reasoning_prompt)
+            reasoning = response.content
         except Exception as e:
-            state.reasoning = f"Analysis error: {str(e)}"
+            reasoning = f"Analysis error: {str(e)}"
         
-        return state
+        # Return updated state
+        return {
+            "confidence_scores": confidence_scores,
+            "reasoning": reasoning
+        }
     
-    def _select_agent(self, state: SupervisorState) -> SupervisorState:
+    def _select_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Select the most appropriate agent based on confidence scores."""
-        if not state.confidence_scores:
-            state.selected_agent = "notion_agent"  # Default fallback
-            return state
+        # Handle both dict and object state formats
+        if hasattr(state, 'confidence_scores'):
+            confidence_scores = state.confidence_scores
+        else:
+            confidence_scores = state.get("confidence_scores", {})
+        
+        if not confidence_scores:
+            return {"selected_agent": "notion_agent"}  # Default fallback
         
         # Select agent with highest confidence score
-        selected_agent = max(state.confidence_scores.items(), key=lambda x: x[1])[0]
+        selected_agent = max(confidence_scores.items(), key=lambda x: x[1])[0]
         
         # If confidence is too low across all agents, use a general approach
-        max_confidence = max(state.confidence_scores.values())
+        max_confidence = max(confidence_scores.values())
+        reasoning_update = ""
         if max_confidence < 0.3:
             # Use the agent with slightly higher confidence but add a note
-            state.selected_agent = selected_agent
-            state.reasoning += f"\n\nNote: Low confidence across all agents (max: {max_confidence:.2f}). Using {selected_agent} as best option."
-        else:
-            state.selected_agent = selected_agent
+            reasoning_update = f"\n\nNote: Low confidence across all agents (max: {max_confidence:.2f}). Using {selected_agent} as best option."
         
-        return state
+        result = {"selected_agent": selected_agent}
+        if reasoning_update:
+            if hasattr(state, 'reasoning'):
+                current_reasoning = state.reasoning
+            else:
+                current_reasoning = state.get("reasoning", "")
+            result["reasoning"] = current_reasoning + reasoning_update
+        
+        return result
     
-    def _execute_task(self, state: SupervisorState) -> SupervisorState:
+    def _execute_task(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the task using the selected agent."""
-        if not state.selected_agent or state.selected_agent not in self.agents:
-            state.agent_response = {
-                "success": False,
-                "response": "No suitable agent found",
-                "error": "Agent selection failed"
-            }
-            return state
+        # Handle both dict and object state formats
+        if hasattr(state, 'selected_agent'):
+            selected_agent_name = state.selected_agent
+            task = state.task
+        else:
+            selected_agent_name = state.get("selected_agent")
+            task = state.get("task", "")
         
-        selected_agent = self.agents[state.selected_agent]
+        if not selected_agent_name or selected_agent_name not in self.agents:
+            return {
+                "agent_response": {
+                    "success": False,
+                    "response": "No suitable agent found",
+                    "error": "Agent selection failed"
+                }
+            }
+        
+        selected_agent = self.agents[selected_agent_name]
         
         try:
-            response = selected_agent.process_task(state.task)
-            state.agent_response = response
+            response = selected_agent.process_task(task)
+            return {"agent_response": response}
         except Exception as e:
-            state.agent_response = {
-                "success": False,
-                "response": f"Agent execution failed: {str(e)}",
-                "error": str(e),
-                "agent": state.selected_agent
+            return {
+                "agent_response": {
+                    "success": False,
+                    "response": f"Agent execution failed: {str(e)}",
+                    "error": str(e),
+                    "agent": selected_agent_name
+                }
             }
-        
-        return state
     
-    def _finalize_response(self, state: SupervisorState) -> SupervisorState:
+    def _finalize_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Finalize the response with supervisor context."""
-        if not state.agent_response:
-            state.final_response = "No response generated"
-            return state
+        # Handle both dict and object state formats
+        if hasattr(state, 'agent_response'):
+            agent_response = state.agent_response
+        else:
+            agent_response = state.get("agent_response", {})
         
-        agent_response = state.agent_response.get("response", "")
-        selected_agent = state.selected_agent
-        confidence = state.confidence_scores.get(selected_agent, 0.0)
+        if not agent_response:
+            return {"final_response": "No response generated"}
+        
+        agent_response_text = agent_response.get("response", "")
         
         # Create a comprehensive response
-        if state.agent_response.get("success", False):
-            state.final_response = f"{agent_response}"
+        if agent_response.get("success", False):
+            final_response = f"{agent_response_text}"
         else:
-            state.final_response = f"I encountered an issue: {agent_response}"
+            final_response = f"I encountered an issue: {agent_response_text}"
         
-        return state
+        return {"final_response": final_response}
     
     def process_message(self, message: str) -> Dict[str, Any]:
         """
@@ -186,24 +229,43 @@ class SupervisorAgent:
             Dict containing the supervisor's orchestrated response
         """
         try:
-            # Create initial state
-            initial_state = SupervisorState(
-                task=message,
-                messages=[{"role": "user", "content": message}]
-            )
+            # Create initial state as a dictionary
+            initial_state = {
+                "task": message,
+                "messages": [{"role": "user", "content": message}],
+                "selected_agent": None,
+                "agent_response": None,
+                "final_response": "",
+                "reasoning": "",
+                "confidence_scores": {}
+            }
             
             # Execute workflow
             config = {"configurable": {"thread_id": "default"}}
             final_state = self.workflow.invoke(initial_state, config=config)
             
+            # Extract results from final state - handle both dict and object formats
+            if hasattr(final_state, 'final_response'):
+                response = final_state.final_response
+                selected_agent = final_state.selected_agent
+                confidence_scores = final_state.confidence_scores
+                reasoning = final_state.reasoning
+                agent_response = final_state.agent_response
+            else:
+                response = final_state.get("final_response", "No response generated")
+                selected_agent = final_state.get("selected_agent")
+                confidence_scores = final_state.get("confidence_scores", {})
+                reasoning = final_state.get("reasoning", "")
+                agent_response = final_state.get("agent_response", {})
+            
             return {
                 "success": True,
-                "response": final_state.final_response,
+                "response": response,
                 "supervisor_metadata": {
-                    "selected_agent": final_state.selected_agent,
-                    "confidence_scores": final_state.confidence_scores,
-                    "reasoning": final_state.reasoning,
-                    "agent_response": final_state.agent_response
+                    "selected_agent": selected_agent,
+                    "confidence_scores": confidence_scores,
+                    "reasoning": reasoning,
+                    "agent_response": agent_response
                 },
                 "workflow_type": "supervisor"
             }

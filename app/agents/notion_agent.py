@@ -44,12 +44,7 @@ class NotionAgent:
             temperature=0.3,  # Lower temperature for more consistent calendar operations
             max_retries=2,
             google_api_key=api_key,
-            system_message=(
-                "You are a specialized Notion and calendar assistant. "
-                "You excel at retrieving events, managing schedules, and working with dates. "
-                "Always provide clear, structured responses about calendar events and dates. "
-                "When working with dates, be precise and consider time zones if relevant."
-            )
+            convert_system_message_to_human=True
         )
     
     def _get_agent(self):
@@ -71,7 +66,17 @@ class NotionAgent:
         """
         try:
             agent = self._get_agent()
-            input_message = {"role": "user", "content": task}
+            
+            # Add system instructions to the task
+            system_instruction = (
+                "You are a specialized Notion and calendar assistant. "
+                "You excel at retrieving events, managing schedules, and working with dates. "
+                "Always provide clear, structured responses about calendar events and dates. "
+                "When working with dates, be precise and consider time zones if relevant."
+            )
+            
+            enhanced_task = f"{system_instruction}\n\nUser request: {task}"
+            input_message = {"role": "user", "content": enhanced_task}
             response = agent.invoke({"messages": [input_message]})
             
             messages = response.get("messages", [])

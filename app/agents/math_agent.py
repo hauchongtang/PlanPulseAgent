@@ -44,12 +44,7 @@ class MathAgent:
             temperature=0.1,  # Very low temperature for precise calculations
             max_retries=2,
             google_api_key=api_key,
-            system_message=(
-                "You are a specialized mathematics assistant. "
-                "You excel at calculations, unit conversions, and solving mathematical problems. "
-                "Always double-check your calculations and provide step-by-step explanations when helpful. "
-                "Be precise with numbers and units. When using tools, explain what you're calculating."
-            )
+            convert_system_message_to_human=True
         )
     
     def _get_agent(self):
@@ -71,7 +66,17 @@ class MathAgent:
         """
         try:
             agent = self._get_agent()
-            input_message = {"role": "user", "content": task}
+            
+            # Add system instructions to the task
+            system_instruction = (
+                "You are a specialized mathematics assistant. "
+                "You excel at calculations, unit conversions, and solving mathematical problems. "
+                "Always double-check your calculations and provide step-by-step explanations when helpful. "
+                "Be precise with numbers and units. When using tools, explain what you're calculating."
+            )
+            
+            enhanced_task = f"{system_instruction}\n\nUser request: {task}"
+            input_message = {"role": "user", "content": enhanced_task}
             response = agent.invoke({"messages": [input_message]})
             
             messages = response.get("messages", [])
