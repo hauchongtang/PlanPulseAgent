@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
+from typing import Optional
 
 from app.api.models import TelegramBase
 from app.services.agent_service import agent_service
+from app.api.settings import get_telegram_secret_key
 
 
 class TelegramMessageRequest(BaseModel):
@@ -23,18 +25,47 @@ class TelegramMessageResponse(BaseModel):
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 
+def verify_secret_key(secret_key: Optional[str]):
+    """Verify the provided secret key against the configured one."""
+    expected_key = get_telegram_secret_key()
+    if not expected_key:
+        raise HTTPException(
+            status_code=500, 
+            detail="Telegram secret key not configured on server"
+        )
+    
+    if not secret_key:
+        raise HTTPException(
+            status_code=401, 
+            detail="Missing X-Secret-Key header"
+        )
+    
+    if secret_key != expected_key:
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid secret key"
+        )
+
+
 @router.post("/", response_model=TelegramMessageResponse)
-async def pass_telegram_message_to_orchestrator(request: TelegramMessageRequest):
+async def pass_telegram_message_to_orchestrator(
+    request: TelegramMessageRequest,
+    x_secret_key: Optional[str] = Header(None, alias="X-Secret-Key")
+):
     """
     Process a telegram message through the AI agent orchestrator.
     
     Args:
         request: The telegram message request containing chat_id and message
+        x_secret_key: Secret key for authentication (X-Secret-Key header)
         
     Returns:
         TelegramMessageResponse: The processed response from the agent
     """
     try:
+        # Verify authentication
+        verify_secret_key(x_secret_key)
+        
         # Process the message through the agent service with user-specific memory
         result = agent_service.process_message(request.chat_message, user_id=request.chat_id)
         

@@ -11,8 +11,7 @@ from langchain_core.tools import BaseTool
 from app.api.settings import get_api_key
 from app.tools.notion.getevents import get_events, get_events_formatted
 from app.tools.notion.createevent import create_event, get_create_event_options
-from app.tools.calendar.add import add
-
+from app.tools.notion.getsummarypage import get_summary_page
 
 class NotionAgent:
     """
@@ -33,7 +32,7 @@ class NotionAgent:
             "I can retrieve events, create new events, query schedules, and handle date-related tasks. "
             "I support both JSON and formatted text outputs for events."
         )
-        self.tools = [get_events, get_events_formatted, create_event, get_create_event_options]
+        self.tools = [get_events, get_events_formatted, create_event, get_create_event_options, get_summary_page]
         self._agent = None
     
     def _create_model(self) -> ChatGoogleGenerativeAI:
@@ -125,7 +124,11 @@ class NotionAgent:
         high_confidence_keywords = [
             'notion', 'calendar', 'event', 'schedule', 'appointment',
             'meeting', 'date', 'database', 'query', 'retrieve', "free", "availability",
-            'activity', 'task', 'reminder', 'agenda', 'planning', 'activities', 'plans', 'events'
+            'activity', 'task', 'reminder', 'agenda', 'planning', 'activities', 'plans', 'events',
+            'things to do', 'to do', 'to-do', 'todo', 'what to do', 'what to do today',
+            'what is on my calendar', 'what is on my schedule', 'what is on my agenda',
+            'what is on my plan', 'what is on my list', 'what is on my todo list', 'what is on my to-do list',
+            'what is on my todo', 'what is on my to do', 'what is on my to-do',
         ]
         
         # Medium confidence keywords
