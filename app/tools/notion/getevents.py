@@ -161,16 +161,22 @@ def get_events_formatted(date_from: datetime.datetime, date_to: datetime.datetim
       notes = extract_text(props.get("Mini Reminder Description", {}).get("rich_text", []))
       url = page.get("url", "")
 
-      block = (
-        f"#### {title}\n"
-        f"- **Date:** {date}\n"
-        f"- **Status:** {status}\n"
-        f"- **Person(s):** {persons}\n"
-        f"- **Where:** {where}\n"
-        f"- **Tags:** {tags}\n"
-        f"- **Notes:** {notes}\n"
-        f"- **Notion URL:** {url}\n\n"
-      )
+      # Mobile-friendly format with HTML-style bold tags
+      block = f'<b>🌟 <a href="{url}">{title}</a></b>\n'
+      if where:
+        block += f'<b>📍 {where}</b>\n'
+      if persons:
+        block += f'<b>👥 {persons}</b>\n'
+      if status:
+        block += f'<b>▶️ {status}</b>\n'
+      if tags:
+        block += f'<b>🏷️ {tags}</b>\n'
+      if date:
+        block += f'<b>📅 {date}</b>\n'
+      if notes:
+        block += f'<b>📝 {notes}</b>\n'
+      
+      block += '\n'
 
       result_str += block
 
