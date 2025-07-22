@@ -117,5 +117,14 @@ class AgentService:
             }
 
 
-# Global instance (singleton pattern)
-agent_service = AgentService()
+def get_agent_service() -> AgentService:
+    """
+    Get a scoped instance of AgentService.
+    
+    This creates a new instance each time it's called, ensuring fresh state
+    and avoiding singleton-related issues with code changes and state persistence.
+    
+    Returns:
+        AgentService: A fresh instance of the agent service
+    """
+    return AgentService()

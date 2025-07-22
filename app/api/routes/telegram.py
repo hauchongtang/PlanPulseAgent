@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.api.models import TelegramBase
-from app.services.agent_service import agent_service
+from app.services.agent_service import get_agent_service
 from app.api.settings import get_telegram_secret_key
 
 
@@ -66,6 +66,9 @@ async def pass_telegram_message_to_orchestrator(
         # Verify authentication
         verify_secret_key(x_secret_key)
         
+        # Get a scoped instance of the agent service
+        agent_service = get_agent_service()
+        
         # Process the message through the agent service with user-specific memory
         result = agent_service.process_message(request.chat_message, user_id=request.chat_id)
         
@@ -96,6 +99,7 @@ async def pass_telegram_message_to_orchestrator(
 @router.get("/health")
 async def health_check():
     """Health check endpoint for the telegram service."""
+    agent_service = get_agent_service()
     health_status = agent_service.health_check()
     
     if health_status.get("status") == "healthy":
@@ -107,6 +111,7 @@ async def health_check():
 @router.get("/tools")
 async def get_available_tools():
     """Get list of available agents and their capabilities."""
+    agent_service = get_agent_service()
     agents = agent_service.get_available_agents()
     capabilities = agent_service.get_agent_capabilities()
     
@@ -120,6 +125,7 @@ async def get_available_tools():
 @router.get("/agents")
 async def get_agent_info():
     """Get detailed information about all available agents."""
+    agent_service = get_agent_service()
     return {
         "supervisor_pattern": True,
         "agents": agent_service.get_agent_capabilities(),
