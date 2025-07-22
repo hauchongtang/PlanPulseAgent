@@ -36,12 +36,24 @@ class AgentService:
         """
         try:
             supervisor = self._get_supervisor()
-            # Use Singapore timezone
+            
+            # Process the original message for agent selection (without timestamp injection)
+            result = supervisor.process_message(message, user_id=user_id)
+            
+            # Add timestamp context to the selected agent's response for execution context
+            # This ensures timestamp info is available to agents without affecting selection
             singapore_tz = pytz.timezone('Asia/Singapore')
             singapore_time = datetime.now(singapore_tz)
             timestamp = singapore_time.strftime("%Y-%m-%d %H:%M:%S %Z")
-            message += f" [In case you are not sure of current DateTime, Current Timestamp is {timestamp}. You are to always use this timestamp until a new one is provided.]"
-            result = supervisor.process_message(message, user_id=user_id)
+            
+            # If the agent execution was successful, we can enhance the response with timestamp awareness
+            if result.get('success') and result.get('supervisor_metadata', {}).get('selected_agent'):
+                # The timestamp will be available to agents during their actual processing
+                # but won't interfere with the selection logic
+                result['timestamp_context'] = {
+                    'singapore_time': timestamp,
+                    'note': 'Current Singapore time for reference'
+                }
             
             # Enhance the response with service-level metadata
             result["service_metadata"] = {

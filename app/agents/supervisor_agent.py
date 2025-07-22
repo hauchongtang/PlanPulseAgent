@@ -60,7 +60,7 @@ class SupervisorAgent:
             raise ValueError("Google API key is not configured")
         
         return ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.2,  # Low temperature for consistent reasoning
             max_retries=2,
             google_api_key=api_key

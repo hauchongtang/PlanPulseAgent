@@ -74,7 +74,10 @@ async def pass_telegram_message_to_orchestrator(
             chat_message=request.chat_message,
             response=result.get("response", ""),
             success=result.get("success", False),
-            metadata=result.get("supervisor_metadata", {})
+            metadata={
+                "supervisor_metadata": result.get("supervisor_metadata", {}),
+                **result.get("service_metadata", {})
+            }
         )
         
     except Exception as e:

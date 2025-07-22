@@ -27,7 +27,7 @@ class TransportAgent:
             "bus", "transport", "mrt", "train", "station", "stop", "arrival", "timing",
             "how to get", "directions", "travel", "commute", "public transport",
             "bus stop", "nearby", "location", "bus stop code", "arrival time",
-            "transit", "transportation", "subway", "rail"
+            "transit", "transportation", "subway", "rail", "busstop", "bus service",
         ]
         
         # Keywords for bus arrival queries (more specific)
