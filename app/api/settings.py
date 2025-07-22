@@ -6,6 +6,9 @@ userdata = os.environ
 def get_api_key():
   return userdata.get("GOOGLE_API_KEY")
 
+def get_google_places_key():
+  return userdata.get("GOOGLE_PLACES_API_KEY")
+
 def get_notion_token():
   return userdata.get('NOTION_TOKEN')
 
@@ -17,3 +20,6 @@ def get_notion_summary_page_id():
 
 def get_telegram_secret_key():
   return userdata.get('PLANPULSE_SECRET_KEY')
+
+def get_lta_datamall_key():
+  return userdata.get('LTA_DATAMALL_API_KEY')

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from app.api.settings import get_api_key
 from app.agents.notion_agent import NotionAgent
 from app.agents.math_agent import MathAgent
+from app.agents.transport_agent import TransportAgent
 
 
 class SupervisorState(BaseModel):
@@ -45,7 +46,8 @@ class SupervisorAgent:
         # Initialize specialized agents
         self.agents = {
             "notion_agent": NotionAgent(),
-            "math_agent": MathAgent()
+            "math_agent": MathAgent(),
+            "transport_agent": TransportAgent()
         }
         
         self.supervisor_model = self._create_supervisor_model()
