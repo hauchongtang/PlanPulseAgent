@@ -23,10 +23,11 @@ PlanPulseAgent implements a sophisticated **Supervisor Pattern** using LangGraph
           │
   ┌───────▼───────┐
   │               │
-┌─▼─┐           ┌─▼─┐
-│N.A│           │M.A│
-└───┘           └───┘
-Notion Agent    Math Agent
+┌─▼─┐   ┌─▼─┐   ┌─▼─┐
+│N.A│   │M.A│   │T.A│
+└───┘   └───┘   └───┘
+Notion  Math   Transport
+Agent   Agent   Agent
 ```
 
 ### 1. **Supervisor Agent** (`app/agents/supervisor_agent.py`)
@@ -48,6 +49,12 @@ Notion Agent    Math Agent
 - **Tools**: `calculate`, `convert_units`, `percentage_calculator`
 - **Optimization**: Very low temperature (0.1) for precise calculations
 - **Expertise**: Arithmetic, algebra, trigonometry, unit conversions
+
+#### **Transport Agent** (`app/agents/transport_agent.py`)
+- **Domain**: Singapore public transport, location search, real-time bus arrivals
+- **Tools**: `transport_search`, `google_places`, `lta_datamall`
+- **Optimization**: Moderate temperature (0.4) for natural conversation
+- **Expertise**: Location discovery, bus stop information, arrival times, follow-up queries
 
 ### 3. **Agent Service Layer** (`app/services/agent_service.py`)
 - **Supervisor Coordination**: Single entry point for all agent interactions
@@ -81,6 +88,13 @@ Notion Agent    Math Agent
 - **Resource Efficiency**: Lazy loading and singleton patterns
 - **Production Ready**: Optimized for deployment and monitoring
 
+### ✅ **Real-Time Transport Integration** 
+- **Google Places API**: Location search with free tier optimization
+- **LTA DataMall API**: Live Singapore bus data with arrival predictions
+- **Follow-Up Query Support**: Conversational transport assistance
+- **Mobile-Optimized Format**: Compact display with emojis and color coding
+- **Bus Capacity Indicators**: Real-time crowding information (🟢🟡🔴)
+
 ## 📊 Agent Selection Process
 
 ### Confidence Scoring Algorithm
@@ -94,10 +108,49 @@ Each specialized agent evaluates incoming tasks:
 ### Example Routing:
 - `"What's my schedule for tomorrow?"` → **Notion Agent** (0.9 confidence)
 - `"Calculate 15% tip on $42.50"` → **Math Agent** (0.9 confidence)
+- `"Bus routes to Marina Bay Sands"` → **Transport Agent** (0.9 confidence)
 - `"Convert 10 miles to kilometers"` → **Math Agent** (0.8 confidence)
 - `"Show me events this week"` → **Notion Agent** (0.8 confidence)
+- `"What time does the next bus arrive?"` → **Transport Agent** (0.9 confidence)
 
-## 🔧 API Endpoints
+## � Transport System Architecture
+
+### Singapore Public Transport Integration
+The Transport Agent provides comprehensive Singapore public transport information through a multi-layered approach:
+
+#### **🗺️ Location Discovery** (`app/tools/transport/google_places.py`)
+- **Google Places API**: Search for locations, malls, attractions
+- **Free Tier Optimization**: Text search with minimal API usage
+- **Address Normalization**: Consistent location formatting
+- **Nearby Discovery**: Find transport hubs near destinations
+
+#### **🚌 Real-Time Bus Data** (`app/tools/transport/lta_datamall.py`)
+- **LTA DataMall v3 API**: Live Singapore bus arrival times
+- **Bus Stop Information**: Complete network of 5,000+ stops
+- **Service Details**: Routes, destinations, operational status
+- **Capacity Indicators**: Real-time bus crowding levels
+
+#### **🔍 Unified Transport Search** (`app/tools/transport/transport_search.py`)
+- **Intelligent Routing**: Combines location search with transport data
+- **Multi-Modal Results**: Bus stops, services, and alternatives
+- **Follow-Up Query Handling**: Seamless conversation continuity
+- **Mobile-Friendly Format**: Compact display with visual indicators
+
+### Follow-Up Query Capabilities
+The Transport Agent excels at conversational transport assistance:
+
+```
+User: "Bus routes to Marina Bay Sands"
+Agent: [Lists nearby bus stops with services]
+
+User: "What time does bus 97 arrive at stop 09047?"
+Agent: "🚌 **Bus 97** at Marina Centre/The Shoppes (09047):
+• **2 mins** 🟢 (Not Crowded)
+• **32 mins** 🟢 (Not Crowded)  
+• **43 mins** 🟡 (Standing Available)"
+```
+
+## �🔧 API Endpoints
 
 ### Core Endpoints
 
@@ -114,17 +167,18 @@ Process messages through supervisor orchestration
 ```json
 {
   "chat_id": "user123",
-  "chat_message": "Calculate the square root of 144",
-  "response": "The square root of 144 is 12",
+  "chat_message": "Bus routes to Marina Bay Sands",
+  "response": "🚌 **Marina Bay Sands** transport options:\n\n**Bus Stops Nearby:**\n• **Marina Centre/The Shoppes** (09047)\n  📍 Marina Bay Sands Shopping Centre\n  🚌 Services: 36, 97, 97e, 106, 133, 502A\n\n• **Marina Sq/Millenia** (11519)\n  📍 Marina Square Shopping Centre\n  🚌 Services: 7, 36, 97, 97e, 106, 133\n\n💡 *Ask me for live arrival times: \"What time does bus 97 arrive at stop 09047?\"*",
   "success": true,
   "metadata": {},
   "supervisor_metadata": {
-    "selected_agent": "math_agent",
+    "selected_agent": "transport_agent",
     "confidence_scores": {
-      "math_agent": 0.9,
-      "notion_agent": 0.1
+      "transport_agent": 0.9,
+      "notion_agent": 0.1,
+      "math_agent": 0.1
     },
-    "reasoning": "High confidence mathematical calculation task",
+    "reasoning": "High confidence transport-related location search",
     "agent_response": {...}
   }
 }
@@ -145,6 +199,12 @@ Get detailed agent information
       "Perform mathematical calculations",
       "Convert between units",
       "Calculate percentages"
+    ],
+    "transport_agent": [
+      "Search Singapore public transport options",
+      "Provide real-time bus arrival information",
+      "Location discovery with Google Places API",
+      "Handle follow-up queries about transport"
     ]
   },
   "workflow": "Each request is analyzed and routed to the most appropriate specialized agent"
@@ -159,12 +219,13 @@ Comprehensive health monitoring
   "supervisor_model": "gemini-2.5-flash",
   "agents": {
     "notion_agent": {"status": "healthy", "capabilities_count": 5},
-    "math_agent": {"status": "healthy", "capabilities_count": 7}
+    "math_agent": {"status": "healthy", "capabilities_count": 7},
+    "transport_agent": {"status": "healthy", "capabilities_count": 8}
   },
   "workflow_compiled": true,
   "service_info": {
     "pattern": "supervisor",
-    "agents_managed": 2,
+    "agents_managed": 3,
     "workflow_enabled": true
   }
 }
@@ -245,4 +306,4 @@ self.agents["new_agent"] = NewAgent()
 - Intuitive API design
 - Comprehensive documentation and examples
 
-This supervisor pattern implementation provides a robust, scalable foundation for multi-agent AI systems with clear specialization and intelligent task routing.
+This supervisor pattern implementation provides a robust, scalable foundation for multi-agent AI systems with clear specialization and intelligent task routing. The addition of the Transport Agent demonstrates the system's extensibility, seamlessly integrating real-time Singapore public transport data with conversational AI capabilities and follow-up query support for enhanced user experience.
