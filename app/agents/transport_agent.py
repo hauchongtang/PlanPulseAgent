@@ -22,18 +22,34 @@ class TransportAgent:
             "and help with public transport planning using Google Places and LTA DataMall APIs."
         )
         
-        # Define transport-related keywords for routing
+        # Define transport-related keywords for routing (more specific)
         self.transport_keywords = [
             "bus", "transport", "mrt", "train", "station", "stop", "arrival", "timing",
             "how to get", "directions", "travel", "commute", "public transport",
-            "bus stop", "near", "nearby", "location", "where is", "find",
-            "bus stop code", "arrival time", "when is the next bus"
+            "bus stop", "nearby", "location", "bus stop code", "arrival time",
+            "transit", "transportation", "subway", "rail"
         ]
         
-        # Keywords for bus arrival queries
+        # Keywords for bus arrival queries (more specific)
         self.arrival_keywords = [
             "arrival time", "arrival times", "when is the next bus", "bus timing",
-            "next bus", "bus arrival", "arrival at", "timing at"
+            "next bus", "bus arrival", "arrival at", "timing at", 
+            "bus schedule", "bus timetable", "real time", "live timing",
+            "when does the bus arrive", "bus departure"
+        ]
+        
+        # Singapore-specific location keywords for higher confidence
+        self.singapore_locations = [
+            "singapore", "sg", "orchard", "marina bay", "changi", "jurong",
+            "tampines", "woodlands", "yishun", "toa payoh", "ang mo kio",
+            "bedok", "pasir ris", "hougang", "punggol", "sengkang",
+            "bukit timah", "clementi", "queenstown", "bishan", "serangoon"
+        ]
+        
+        # Transport-specific phrases that indicate high confidence
+        self.transport_phrases = [
+            "public transport", "bus service", "bus route", "bus number",
+            "bus stop code", "lta", "sbs transit", "smrt", "go-ahead"
         ]
     
     def can_handle(self, task: str) -> float:
@@ -47,35 +63,169 @@ class TransportAgent:
             Confidence score between 0.0 and 1.0
         """
         task_lower = task.lower()
+        confidence = 0.1  # Base confidence
         
-        # Very high confidence for bus arrival timing queries
+        # Early filter: if task contains obvious non-transport keywords, reduce confidence
+        non_transport_indicators = [
+            "calculate", "math", "equation", "calendar", "event", "meeting",
+            "schedule appointment", "what time is it", "current time", "clock",
+            "weather", "temperature", "email", "message"
+        ]
+        
+        if any(indicator in task_lower for indicator in non_transport_indicators):
+            # Still check for transport keywords, but with reduced confidence
+            has_transport = any(keyword in task_lower for keyword in self.transport_keywords)
+            if not has_transport:
+                return 0.05  # Very low confidence for non-transport queries
+        
+        # Very high confidence (0.95+) for bus arrival timing queries
         if any(keyword in task_lower for keyword in self.arrival_keywords):
-            return 0.95
+            confidence = max(confidence, 0.95)
         
-        # High confidence for explicit transport queries
+        # Very high confidence for Singapore transport-specific phrases
+        if any(phrase in task_lower for phrase in self.transport_phrases):
+            confidence = max(confidence, 0.95)
+        
+        # High confidence (0.9) for explicit transport queries
         high_confidence_phrases = [
             "bus stop", "bus arrival", "bus timing", "public transport",
             "how to get to", "directions to", "travel to", "commute to",
-            "transport near", "bus near", "mrt near", "train to"
+            "transport near", "bus near", "mrt near", "train to", "subway",
+            "transit", "transportation"
         ]
         
         for phrase in high_confidence_phrases:
             if phrase in task_lower:
-                return 0.9
+                confidence = max(confidence, 0.9)
         
-        # Medium confidence for transport-related keywords
+        # Boost confidence for Singapore-specific locations
+        singapore_boost = 0.0
+        if any(location in task_lower for location in self.singapore_locations):
+            singapore_boost = 0.2
+        
+        # Medium-high confidence (0.7-0.8) for transport-related keywords
         keyword_matches = sum(1 for keyword in self.transport_keywords if keyword in task_lower)
-        if keyword_matches >= 2:
-            return 0.7
+        if keyword_matches >= 3:
+            confidence = max(confidence, 0.8)
+        elif keyword_matches >= 2:
+            confidence = max(confidence, 0.7)
         elif keyword_matches == 1:
-            return 0.5
+            confidence = max(confidence, 0.5)
         
-        # Low confidence for location queries that might need transport
-        location_indicators = ["near", "at", "around", "close to", "vicinity"]
+        # Apply Singapore location boost
+        confidence = min(1.0, confidence + singapore_boost)
+        
+        # Medium confidence (0.6) for numbered routes/services
+        import re
+        if re.search(r'\b(?:service|bus|route)\s*\d+\b', task_lower):
+            confidence = max(confidence, 0.6)
+        
+        # Bus stop codes (4-5 digits) indicate transport query
+        if re.search(r'\b\d{4,5}\b', task_lower):
+            confidence = max(confidence, 0.8)
+        
+        # Medium confidence for location queries that might need transport
+        location_indicators = ["near", "at", "around", "close to", "vicinity", "nearby"]
         if any(indicator in task_lower for indicator in location_indicators):
-            return 0.3
+            # Only boost if there are also transport-related words
+            has_transport_context = any(keyword in task_lower for keyword in self.transport_keywords[:8])  # Core transport words
+            if has_transport_context:
+                confidence = max(confidence, 0.4)
+            else:
+                confidence = max(confidence, 0.2)  # Lower boost for pure location queries
         
-        return 0.1
+        # Lower confidence for very generic queries without transport context
+        generic_phrases = ["where", "what", "how", "when", "find", "search"]
+        if (len(task_lower.split()) <= 3 and 
+            any(phrase in task_lower for phrase in generic_phrases) and
+            not any(keyword in task_lower for keyword in self.transport_keywords[:8])):
+            confidence = max(confidence, 0.1)  # Keep at base level
+        
+        return round(confidence, 2)
+    
+    def get_confidence_explanation(self, task: str) -> Dict[str, Any]:
+        """
+        Get detailed explanation of confidence scoring for debugging.
+        
+        Args:
+            task: The task description
+            
+        Returns:
+            Dict containing confidence details and reasoning
+        """
+        task_lower = task.lower()
+        explanations = []
+        confidence = 0.1
+        
+        # Check arrival keywords
+        arrival_matches = [kw for kw in self.arrival_keywords if kw in task_lower]
+        if arrival_matches:
+            confidence = max(confidence, 0.95)
+            explanations.append(f"Bus arrival keywords found: {arrival_matches}")
+        
+        # Check transport phrases
+        transport_matches = [phrase for phrase in self.transport_phrases if phrase in task_lower]
+        if transport_matches:
+            confidence = max(confidence, 0.95)
+            explanations.append(f"Singapore transport phrases: {transport_matches}")
+        
+        # Check high confidence phrases
+        high_confidence_phrases = [
+            "bus stop", "bus arrival", "bus timing", "public transport",
+            "how to get to", "directions to", "travel to", "commute to",
+            "transport near", "bus near", "mrt near", "train to", "subway",
+            "transit", "transportation"
+        ]
+        high_matches = [phrase for phrase in high_confidence_phrases if phrase in task_lower]
+        if high_matches:
+            confidence = max(confidence, 0.9)
+            explanations.append(f"High confidence transport phrases: {high_matches}")
+        
+        # Check Singapore locations
+        sg_matches = [loc for loc in self.singapore_locations if loc in task_lower]
+        singapore_boost = 0.2 if sg_matches else 0.0
+        if sg_matches:
+            explanations.append(f"Singapore locations boost (+0.2): {sg_matches}")
+        
+        # Check keyword matches
+        keyword_matches = [kw for kw in self.transport_keywords if kw in task_lower]
+        if len(keyword_matches) >= 3:
+            confidence = max(confidence, 0.8)
+            explanations.append(f"Multiple transport keywords (0.8): {keyword_matches}")
+        elif len(keyword_matches) >= 2:
+            confidence = max(confidence, 0.7)
+            explanations.append(f"Two transport keywords (0.7): {keyword_matches}")
+        elif len(keyword_matches) == 1:
+            confidence = max(confidence, 0.5)
+            explanations.append(f"One transport keyword (0.5): {keyword_matches}")
+        
+        # Apply Singapore boost
+        confidence = min(1.0, confidence + singapore_boost)
+        
+        # Check for numbered routes
+        import re
+        if re.search(r'\b(?:service|bus|route)\s*\d+\b', task_lower):
+            confidence = max(confidence, 0.6)
+            explanations.append("Bus service number detected (0.6)")
+        
+        # Check for bus stop codes
+        if re.search(r'\b\d{4,5}\b', task_lower):
+            confidence = max(confidence, 0.8)
+            explanations.append("Bus stop code detected (0.8)")
+        
+        # Check location indicators
+        location_indicators = ["near", "at", "around", "close to", "vicinity", "nearby"]
+        location_matches = [ind for ind in location_indicators if ind in task_lower]
+        if location_matches:
+            confidence = max(confidence, 0.4)
+            explanations.append(f"Location indicators (0.4): {location_matches}")
+        
+        return {
+            "confidence": round(confidence, 2),
+            "explanations": explanations,
+            "task": task,
+            "agent": self.name
+        }
     
     def process_task(self, task: str) -> Dict[str, Any]:
         """
