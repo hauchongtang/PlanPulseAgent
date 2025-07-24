@@ -13,6 +13,7 @@ from app.api.settings import get_api_key
 from app.agents.notion_agent import NotionAgent
 from app.agents.math_agent import MathAgent
 from app.agents.transport_agent import TransportAgent
+from app.agents.weather_agent import WeatherAgent
 
 
 class SupervisorState(BaseModel):
@@ -46,8 +47,9 @@ class SupervisorAgent:
         # Initialize specialized agents
         self.agents = {
             "notion_agent": NotionAgent(),
-            "math_agent": MathAgent(),
-            "transport_agent": TransportAgent()
+            # "math_agent": MathAgent(),
+            "transport_agent": TransportAgent(),
+            "weather_agent": WeatherAgent()
         }
         
         self.supervisor_model = self._create_supervisor_model()
@@ -60,7 +62,7 @@ class SupervisorAgent:
             raise ValueError("Google API key is not configured")
         
         return ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             temperature=0.2,  # Low temperature for consistent reasoning
             max_retries=2,
             google_api_key=api_key
@@ -79,6 +81,7 @@ class SupervisorAgent:
             final_response: str = ""
             reasoning: str = ""
             confidence_scores: Dict[str, float] = {}
+            timestamp_context: Dict[str, Any] = {}
         
         workflow = StateGraph(WorkflowState)
         
@@ -248,10 +251,12 @@ class SupervisorAgent:
             selected_agent_name = state.selected_agent
             task = state.task
             messages = getattr(state, 'messages', [])
+            timestamp_context = getattr(state, 'timestamp_context', {})
         else:
             selected_agent_name = state.get("selected_agent")
             task = state.get("task", "")
             messages = state.get("messages", [])
+            timestamp_context = state.get("timestamp_context", {})
         
         if not selected_agent_name or selected_agent_name not in self.agents:
             return {
@@ -302,6 +307,21 @@ class SupervisorAgent:
             else:
                 enhanced_task = task
             
+            # Add timestamp context for time-aware agents (notion and weather)
+            if selected_agent_name in ["notion_agent", "weather_agent"] and timestamp_context:
+                timestamp_info = f"""
+[SYSTEM CONTEXT] Current Singapore time information:
+- Current date and time: {timestamp_context.get('singapore_time', 'Unknown')}
+- Today's date: {timestamp_context.get('singapore_date', 'Unknown')}
+- ISO datetime: {timestamp_context.get('singapore_datetime', 'Unknown')}
+
+When using tools that require datetime parameters:
+- For "today": use {timestamp_context.get('singapore_date', 'Unknown')}
+- For current datetime: use {timestamp_context.get('singapore_datetime', 'Unknown')}
+- Parse relative dates (tomorrow, yesterday) based on today's date: {timestamp_context.get('singapore_date', 'Unknown')}
+"""
+                enhanced_task = enhanced_task + timestamp_info
+            
             response = selected_agent.process_task(enhanced_task)
             return {"agent_response": response}
         except Exception as e:
@@ -344,13 +364,14 @@ class SupervisorAgent:
             "messages": updated_messages
         }
     
-    def process_message(self, message: str, user_id: str = None) -> Dict[str, Any]:
+    def process_message(self, message: str, user_id: str = None, timestamp_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Process a message through the supervisor workflow with user-specific memory.
         
         Args:
             message: The user's input message
             user_id: Unique identifier for the user (for memory isolation)
+            timestamp_context: Current timestamp information for time-aware agents
             
         Returns:
             Dict containing the supervisor's orchestrated response
@@ -381,7 +402,8 @@ class SupervisorAgent:
                 "agent_response": None,
                 "final_response": "",
                 "reasoning": "",
-                "confidence_scores": {}
+                "confidence_scores": {},
+                "timestamp_context": timestamp_context or {}
             }
             
             # Execute workflow with user-specific thread ID for memory isolation

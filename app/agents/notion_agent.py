@@ -42,7 +42,7 @@ class NotionAgent:
             raise ValueError("Google API key is not configured")
         
         return ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-1.5-flash",
             temperature=0.3,  # Lower temperature for more consistent calendar operations
             max_retries=2,
             google_api_key=api_key,
@@ -74,7 +74,14 @@ class NotionAgent:
                 "You are a specialized Notion assistant. "
                 "You excel at retrieving events, managing schedules, and working with dates. "
                 "Always provide clear, structured responses about events and dates. "
-                "When working with dates, be precise and consider time zones if relevant."
+                
+                "IMPORTANT DATE HANDLING: "
+                "- When users ask about 'today', 'my events today', use today's date from the SYSTEM CONTEXT. "
+                "- When users ask about 'tomorrow', 'this week', calculate from today's date. "
+                "- When calling tools that need datetime parameters, convert dates to datetime objects. "
+                "- Look for [SYSTEM CONTEXT] in the message for current date information. "
+                "- For date ranges, use appropriate start and end dates. "
+                
                 "Please ensure that the data displayed is beautifully formatted and easy to read on Telegram."
             )
             
@@ -123,7 +130,7 @@ class NotionAgent:
         # High confidence keywords
         high_confidence_keywords = [
             'notion', 'calendar', 'event', 'schedule', 'appointment',
-            'meeting', 'date', 'database', 'query', 'retrieve', "free", "availability",
+            'meeting', 'database', 'query', 'retrieve', "free", "availability",
             'activity', 'task', 'reminder', 'agenda', 'planning', 'activities', 'plans', 'events',
             'things to do', 'to do', 'to-do', 'todo', 'what to do', 'what to do today',
             'what is on my calendar', 'what is on my schedule', 'what is on my agenda',

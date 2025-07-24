@@ -1,7 +1,10 @@
 import json
 from typing import List, Dict, Any
 from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.prebuilt import create_react_agent
 
+from app.api.settings import get_api_key
 from app.tools.transport.transport_search import find_bus_stops_near_location, get_transport_summary
 from app.tools.transport.google_places import search_places, get_place_coordinates
 from app.tools.transport.lta_datamall import get_nearby_bus_stops, get_bus_arrival_timing
@@ -21,6 +24,15 @@ class TransportAgent:
             "I can find bus stops near locations, provide real-time arrival timings, "
             "and help with public transport planning using Google Places and LTA DataMall APIs."
         )
+        self.tools = [
+            find_bus_stops_near_location,
+            get_transport_summary,
+            search_places,
+            get_place_coordinates,
+            get_nearby_bus_stops,
+            get_bus_arrival_timing
+        ]
+        self._agent = None
         
         # Define transport-related keywords for routing (more specific)
         self.transport_keywords = [
@@ -51,6 +63,27 @@ class TransportAgent:
             "public transport", "bus service", "bus route", "bus number",
             "bus stop code", "lta", "sbs transit", "smrt", "go-ahead"
         ]
+    
+    def _create_model(self) -> ChatGoogleGenerativeAI:
+        """Create a specialized model for transport operations."""
+        api_key = get_api_key()
+        if not api_key:
+            raise ValueError("Google API key is not configured")
+        
+        return ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            temperature=0.2,  # Low temperature for consistent transport information
+            max_retries=2,
+            google_api_key=api_key,
+            convert_system_message_to_human=True
+        )
+    
+    def _get_agent(self):
+        """Get or create the Transport agent executor."""
+        if self._agent is None:
+            model = self._create_model()
+            self._agent = create_react_agent(model, self.tools)
+        return self._agent
     
     def can_handle(self, task: str) -> float:
         """
@@ -238,28 +271,28 @@ class TransportAgent:
             Dict containing the response and metadata
         """
         try:
-            task_lower = task.lower()
+            agent = self._get_agent()
             
-            # Check if this is a bus arrival timing query (follow-up)
-            if any(keyword in task_lower for keyword in self.arrival_keywords):
-                response = self._handle_arrival_query(task)
-            # Determine the type of transport query
-            elif any(phrase in task_lower for phrase in ["bus stop", "bus near", "bus timing"]):
-                # This is a bus stop/timing query
-                response = self._handle_bus_query(task)
-            elif any(phrase in task_lower for phrase in ["how to get", "directions", "travel to", "commute"]):
-                # This is a directions query
-                response = self._handle_directions_query(task)
-            elif "near" in task_lower or "around" in task_lower:
-                # This is a location-based query
-                response = self._handle_location_query(task)
-            else:
-                # General transport query
-                response = self._handle_general_query(task)
+            # Add system instructions to the task
+            system_instruction = (
+                "You are a specialized Singapore public transport assistant. "
+                "You excel at finding bus stops, providing real-time arrival times, and helping with transport planning. "
+                "Always provide helpful, accurate information about Singapore public transport. "
+                "Use the available tools to get real-time data when needed. "
+                "Be friendly and provide practical travel advice."
+            )
+            
+            enhanced_task = f"{system_instruction}\n\nUser request: {task}"
+            input_message = {"role": "user", "content": enhanced_task}
+            response = agent.invoke({"messages": [input_message]})
+            
+            # Extract the final message content
+            final_message = response.get("messages", [])[-1]
+            content = final_message.content if hasattr(final_message, 'content') else str(final_message)
             
             return {
                 "success": True,
-                "response": response,
+                "response": content,
                 "agent": self.name,
                 "task_type": "transport_query"
             }

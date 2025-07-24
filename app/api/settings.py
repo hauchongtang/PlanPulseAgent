@@ -23,3 +23,6 @@ def get_telegram_secret_key():
 
 def get_lta_datamall_key():
   return userdata.get('LTA_DATAMALL_API_KEY')
+
+def get_weather_url():
+  return userdata.get('WEATHER_API_URL')

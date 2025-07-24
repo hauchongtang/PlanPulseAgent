@@ -37,23 +37,31 @@ class AgentService:
         try:
             supervisor = self._get_supervisor()
             
-            # Process the original message for agent selection (without timestamp injection)
-            result = supervisor.process_message(message, user_id=user_id)
-            
-            # Add timestamp context to the selected agent's response for execution context
-            # This ensures timestamp info is available to agents without affecting selection
+            # Get current Singapore time for timestamp context
             singapore_tz = pytz.timezone('Asia/Singapore')
             singapore_time = datetime.now(singapore_tz)
             timestamp = singapore_time.strftime("%Y-%m-%d %H:%M:%S %Z")
             
-            # If the agent execution was successful, we can enhance the response with timestamp awareness
-            if result.get('success') and result.get('supervisor_metadata', {}).get('selected_agent'):
-                # The timestamp will be available to agents during their actual processing
-                # but won't interfere with the selection logic
-                result['timestamp_context'] = {
-                    'singapore_time': timestamp,
-                    'note': 'Current Singapore time for reference'
-                }
+            # Create timestamp context that can be used by agents
+            timestamp_context = {
+                'singapore_time': timestamp,
+                'singapore_date': singapore_time.strftime("%Y-%m-%d"),
+                'singapore_datetime': singapore_time.strftime("%Y-%m-%d %H:%M:%S"),
+                'singapore_iso': singapore_time.isoformat(),
+                'year': singapore_time.year,
+                'month': singapore_time.month,
+                'day': singapore_time.day,
+                'hour': singapore_time.hour,
+                'minute': singapore_time.minute,
+                'weekday': singapore_time.strftime("%A"),
+                'note': 'Current Singapore time for reference'
+            }
+            
+            # Process the message with timestamp context
+            result = supervisor.process_message(message, user_id=user_id, timestamp_context=timestamp_context)
+            
+            # Add timestamp context to the result for client reference
+            result['timestamp_context'] = timestamp_context
             
             # Enhance the response with service-level metadata
             result["service_metadata"] = {
