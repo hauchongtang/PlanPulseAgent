@@ -280,6 +280,19 @@ class TransportAgent:
                 "Always provide helpful, accurate information about Singapore public transport. "
                 "Use the available tools to get real-time data when needed. "
                 "Be friendly and provide practical travel advice."
+
+                "**Search for bus stops near locations**: "
+                "- If the user asks about bus arrival times at a location, use the search_places tool to get nearby coordinates."
+                "- Then, use the get_nearby_bus_stops tool to find bus stops within 500 meters of those coordinates."
+                "- Format the response with bus stop details including distance and services available as well as arrival times. Nearby bus stops should be sorted by distance."
+
+                "Example Query:"
+                "- What are the busstops near Pioneer Mall?"
+                "You will need to use the find_bus_stops_near_location tool. the location query here is Pioneer Mall."
+                "Please be smart about where to extract the location query."
+
+                "If all else fails:"
+                "Respond with: Please upload your desired location directly to the chat."
             )
             
             enhanced_task = f"{system_instruction}\n\nUser request: {task}"

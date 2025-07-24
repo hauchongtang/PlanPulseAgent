@@ -115,7 +115,7 @@ class WeatherAgent:
         # High confidence (0.9) for weather-specific words
         direct_weather_words = [
             "weather", "forecast", "rain", "temperature", "sunny", "cloudy",
-            "storm", "thunderstorm", "drizzle", "haze", "humidity"
+            "storm", "thunderstorm", "drizzle", "haze", "humidity" "raining"
         ]
         
         weather_word_matches = sum(1 for word in direct_weather_words if word in task_lower)
@@ -248,6 +248,12 @@ class WeatherAgent:
                 "- Look for [SYSTEM CONTEXT] in the message for current date information. "
                 
                 "Provide practical advice based on weather conditions (e.g., umbrella recommendations for rain)."
+
+                "If the user asks about UV index, use the get_uv tool to provide accurate UV information."
+
+                "If the user asks about weather planning, provide advice based on current and forecasted conditions."
+
+                "If the user asks whether it will rain (or other conditions), provide the likelihood of rain based on current conditions of get_weather_by_date tool."
             )
             
             enhanced_task = f"{system_instruction}\n\nUser request: {task}"
