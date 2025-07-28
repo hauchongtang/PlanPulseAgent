@@ -47,8 +47,8 @@ def find_bus_stops_near_location(location_query: str, max_distance: int = 500) -
             "max_distance": max_distance
         })
         bus_stops_data = json.loads(bus_stops_result)
-        
         if "error" in bus_stops_data:
+            print("find_bus_stops_near_location -> Error in fetching busstop data")
             return json.dumps({
                 "error": f"Could not fetch bus stops: {bus_stops_data.get('error')}",
                 "location_query": location_query,

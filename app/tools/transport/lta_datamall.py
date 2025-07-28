@@ -25,59 +25,54 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     
     return R * c
 
-
-@tool("get_nearby_bus_stops")
-def get_nearby_bus_stops(latitude: float, longitude: float, max_distance: int = 500, limit: int = 10) -> str:
-    """
-    Get nearby bus stops using LTA DataMall API.
-    
-    Args:
-        latitude: Latitude coordinate
-        longitude: Longitude coordinate
-        max_distance: Maximum distance in meters (default: 500m)
-        limit: Maximum number of bus stops to return (default: 10)
-        
-    Returns:
-        JSON string with nearby bus stops information
-    """
+def get_nearby_bus_stops_fn(latitude: float, longitude: float, max_distance: float = 0.5, limit: int = 10):
     try:
         api_key = get_lta_datamall_key()
         if not api_key:
             return json.dumps({"error": "LTA DataMall API key not configured"})
         
+        page = 1
+        pageSize = 500
+        bus_stops = []
         url = "https://datamall2.mytransport.sg/ltaodataservice/BusStops"
         headers = {
             "AccountKey": api_key,
             "Accept": "application/json"
         }
+
+        while (True):
+            response = requests.get(f"{url}?$skip={page*pageSize}", headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            stops = data.get("value", [])
+            if (stops is None or len(stops) == 0):
+                break
+            bus_stops.extend(stops)
+            page += 1
         
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        bus_stops = data.get("value", [])
         
         # Calculate distances and filter nearby stops
         nearby_stops = []
+        max_distance_meters = max_distance * 1000  # Convert km to meters for comparison
         for stop in bus_stops:
             stop_lat = float(stop.get("Latitude", 0))
             stop_lon = float(stop.get("Longitude", 0))
             
-            distance = calculate_distance(latitude, longitude, stop_lat, stop_lon)
-            
-            if distance <= max_distance:
+            distance_meters = calculate_distance(latitude, longitude, stop_lat, stop_lon)
+            distance_km = distance_meters / 1000  # Convert to km for storage
+            if distance_meters <= max_distance_meters:
                 stop_info = {
                     "bus_stop_code": stop.get("BusStopCode"),
                     "road_name": stop.get("RoadName"),
                     "description": stop.get("Description"),
                     "latitude": stop_lat,
                     "longitude": stop_lon,
-                    "distance_meters": round(distance, 1)
+                    "distance_km": round(distance_km, 3)
                 }
                 nearby_stops.append(stop_info)
         
         # Sort by distance and limit results
-        nearby_stops.sort(key=lambda x: x["distance_meters"])
+        nearby_stops.sort(key=lambda x: x["distance_km"])
         nearby_stops = nearby_stops[:limit]
         
         result = {
@@ -85,7 +80,7 @@ def get_nearby_bus_stops(latitude: float, longitude: float, max_distance: int = 
                 "latitude": latitude,
                 "longitude": longitude
             },
-            "max_distance_meters": max_distance,
+            "max_distance_km": max_distance,
             "bus_stops_found": len(nearby_stops),
             "bus_stops": nearby_stops
         }
@@ -98,18 +93,24 @@ def get_nearby_bus_stops(latitude: float, longitude: float, max_distance: int = 
             "search_location": {"latitude": latitude, "longitude": longitude}
         })
 
-
-@tool("get_bus_arrival_timing")
-def get_bus_arrival_timing(bus_stop_code: str) -> str:
+@tool("get_nearby_bus_stops")
+def get_nearby_bus_stops(latitude: float, longitude: float, max_distance: float = 0.5, limit: int = 10) -> str:
     """
-    Get real-time bus arrival information for a specific bus stop.
+    Get nearby bus stops using LTA DataMall API.
     
     Args:
-        bus_stop_code: The bus stop code to get arrival timings for
+        latitude: Latitude coordinate
+        longitude: Longitude coordinate
+        max_distance: Maximum distance in kilometers (default: 0.5km)
+        limit: Maximum number of bus stops to return (default: 10)
         
     Returns:
-        JSON string with bus arrival timings
+        JSON string with nearby bus stops information
     """
+    return get_nearby_bus_stops_fn(latitude, longitude, max_distance, limit)
+
+
+def get_bus_arrival_timing_fn(bus_stop_code: str) -> str:
     try:
         api_key = get_lta_datamall_key()
         if not api_key:
@@ -128,7 +129,7 @@ def get_bus_arrival_timing(bus_stop_code: str) -> str:
         response.raise_for_status()
         
         data = response.json()
-        
+
         # Format the arrival information according to LTA DataMall v3 structure
         services = data.get("Services", [])
         formatted_services = []
@@ -181,9 +182,22 @@ def get_bus_arrival_timing(bus_stop_code: str) -> str:
             "bus_stop_code": bus_stop_code
         })
 
+@tool("get_bus_arrival_timing")
+def get_bus_arrival_timing(bus_stop_code: str) -> str:
+    """
+    Get real-time bus arrival information for a specific bus stop.
+    
+    Args:
+        bus_stop_code: The bus stop code to get arrival timings for
+        
+    Returns:
+        JSON string with bus arrival timings
+    """
+    return get_bus_arrival_timing_fn(bus_stop_code)
+
 
 @tool("get_bus_stops_with_arrivals")
-def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance: int = 500, limit: int = 5) -> str:
+def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance: float = 0.5, limit: int = 5) -> str:
     """
     Get nearby bus stops with their arrival timings.
     This combines both location search and arrival timing in one call.
@@ -191,7 +205,7 @@ def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance:
     Args:
         latitude: Latitude coordinate
         longitude: Longitude coordinate  
-        max_distance: Maximum distance in meters (default: 500m)
+        max_distance: Maximum distance in kilometers (default: 0.5km)
         limit: Maximum number of bus stops to return (default: 5)
         
     Returns:
@@ -199,12 +213,7 @@ def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance:
     """
     try:
         # First get nearby bus stops
-        stops_result = get_nearby_bus_stops.invoke({
-            "latitude": latitude, 
-            "longitude": longitude, 
-            "max_distance": max_distance, 
-            "limit": limit
-        })
+        stops_result = get_nearby_bus_stops_fn(latitude, longitude, max_distance, limit)
         stops_data = json.loads(stops_result)
         
         if "error" in stops_data:
@@ -218,7 +227,7 @@ def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance:
             bus_stop_code = stop.get("bus_stop_code")
             
             # Get arrival timings
-            arrivals_result = get_bus_arrival_timing.invoke({"bus_stop_code": bus_stop_code})
+            arrivals_result = get_bus_arrival_timing_fn(bus_stop_code)
             arrivals_data = json.loads(arrivals_result)
             
             stop_with_arrivals = {
@@ -232,7 +241,7 @@ def get_bus_stops_with_arrivals(latitude: float, longitude: float, max_distance:
                 "latitude": latitude,
                 "longitude": longitude
             },
-            "max_distance_meters": max_distance,
+            "max_distance_km": max_distance,
             "bus_stops_with_arrivals": stops_with_arrivals
         }
         

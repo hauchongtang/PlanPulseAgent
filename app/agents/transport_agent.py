@@ -25,11 +25,7 @@ class TransportAgent:
             "and help with public transport planning using Google Places and LTA DataMall APIs."
         )
         self.tools = [
-            find_bus_stops_near_location,
             get_transport_summary,
-            search_places,
-            get_place_coordinates,
-            get_nearby_bus_stops,
             get_bus_arrival_timing
         ]
         self._agent = None
@@ -283,13 +279,12 @@ class TransportAgent:
 
                 "**Search for bus stops near locations**: "
                 "- If the user asks about bus arrival times at a location, use the search_places tool to get nearby coordinates."
-                "- Then, use the get_nearby_bus_stops tool to find bus stops within 500 meters of those coordinates."
+                "- Then, use the get_transport_summary tool to find bus stops within 500 meters of those coordinates."
                 "- Format the response with bus stop details including distance and services available as well as arrival times. Nearby bus stops should be sorted by distance."
 
                 "Example Query:"
-                "- What are the busstops near Pioneer Mall?"
-                "You will need to use the find_bus_stops_near_location tool. the location query here is Pioneer Mall."
-                "Please be smart about where to extract the location query."
+                "- What are the busstops near Pioneer Mall ?"
+                "- What are the bus near Jurong East MRT ?"
 
                 "If all else fails:"
                 "Respond with: Please upload your desired location directly to the chat."
