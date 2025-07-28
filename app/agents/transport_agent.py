@@ -280,14 +280,16 @@ class TransportAgent:
                 "**Search for bus stops near locations**: "
                 "- If the user asks about bus arrival times at a location, use the search_places tool to get nearby coordinates."
                 "- Then, use the get_transport_summary tool to find bus stops within 500 meters of those coordinates."
-                "- Format the response with bus stop details including distance and services available as well as arrival times. Nearby bus stops should be sorted by distance."
+                "- Format the response with bus stop details including distance and services available as well as arrival times. "
+                "Nearby bus stops should be sorted by distance."
+                "List all bus stops found and their arrival timings if available. As concise as possible."
 
                 "Example Query:"
                 "- What are the busstops near Pioneer Mall ?"
-                "- What are the bus near Jurong East MRT ?"
+                "- What are the busstops near Jurong East MRT ?"
 
-                "If all else fails:"
-                "Respond with: Please upload your desired location directly to the chat."
+                "**Get real-time bus arrival timings**: "
+                "- If the user asks for bus arrival times, extract the bus stop code from the query. It is usually a 5-digit number."
             )
             
             enhanced_task = f"{system_instruction}\n\nUser request: {task}"
